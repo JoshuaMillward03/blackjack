@@ -110,7 +110,7 @@ class Card(Moveable):
                     self.current_width = 1
 
 class Deck:
-    def __init__(self, images, x, y, cards: list[Card] | None = None, num_decks = 1):
+    def __init__(self, images, x, y, cards: list[Card] | None = None, num_decks = 2):
         self.images = images
         self.x = x
         self.y = y
@@ -133,6 +133,12 @@ class Deck:
     def deal_card(self) -> Card:
         if len(self) == 0:
             self.cards = self.starting_cards.copy()
+
+            for card in self.cards:#reset card faces when reshuffling. 
+                card.face_up = False
+                card.flipping = False
+                card.current_width = card.original_width
+
             self.shuffle_deck()
         return self.cards.pop()
     
@@ -351,6 +357,8 @@ class AssetManager:
         self.card_images["card_back"] = final_image
 
     def load_audio(self):
+        self.music = pygame.mixer.music.load("Audio/lofi_music.mp3")
+        pygame.mixer.music.set_volume(0.1)
         self.sounds["click"] = pygame.mixer.Sound("Audio/switch_001.ogg")
         self.sounds["click"].set_volume(0.05)
         self.sounds["deal_card"] = pygame.mixer.Sound("Audio/Card Deal 2.wav")
@@ -371,11 +379,14 @@ class AssetManager:
         if name in self.sounds:
             self.sounds[name].play()
 
+    def play_music(self):
+        pygame.mixer.music.play(-1)
+
 class Game:
     BACKGROUND_COLOR = (47, 101, 77)
     def __init__(self, game_surface):
         self.asset_manager = AssetManager()
-        
+        self.asset_manager.play_music()
         self.game_surface = game_surface
 
         self.deck = Deck(self.asset_manager.card_images, 575, 35)
