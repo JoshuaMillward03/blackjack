@@ -37,13 +37,10 @@ class Moveable:
                 self.pos -= self.direction * self.speed
 
 class Chip(Moveable):
-    counter = 0
     def __init__(self, x, y, image: pygame.Surface):
         super().__init__(x, y)
         self.in_bet = False
-        self.id = Chip.counter
         self.chip_rect = image.get_rect(center=(x, y))
-        Chip.counter += 1
         self.image = image
 
     def draw(self, game_surface):
@@ -52,6 +49,12 @@ class Chip(Moveable):
     def update(self):
         super().update()
         self.chip_rect.center = (int(self.pos.x), int(self.pos.y))
+
+    def move_offscreen(self):
+        self.move_to(-25,-25)
+
+    def reset_pos(self):
+        self.move_to(self.default_pos.x, self.default_pos.y)
 
 class Card(Moveable):
     def __init__(self, x, y, suit: str, rank: str, front: pygame.Surface, back: pygame.Surface, face_up: bool = False):
@@ -358,6 +361,8 @@ class AssetManager:
         self.sounds["disable_buttons"].set_volume(0.15)
         self.sounds["enable_buttons"] = pygame.mixer.Sound("Audio/switch_005.ogg")
         self.sounds["enable_buttons"].set_volume(0.15)
+        self.sounds["player_bust"] = pygame.mixer.Sound("Audio/player_bust.wav")
+        self.sounds["player_bust"].set_volume(0.1)
         for i in range(1, 5):
             self.sounds[f"chips_collide_{i}"] = pygame.mixer.Sound(f"Audio/chips-collide-{i}.ogg")
             self.sounds[f"chips_collide_{i}"].set_volume(0.15)
@@ -380,6 +385,7 @@ class Game:
         self.chip_pool = []
         self.starting_chips = 20
         self.player_money = 0
+        self.max_bet = 10
 
         self.dealer = Hand([], 212, 100)
         self.dealer.facedown_offset = 125
@@ -396,7 +402,8 @@ class Game:
         self.texts = {
             "bet_display": Text(370, 700, f"${self.current_bet}", text_offset_x=-6),
             "player_money": Text(25, 730, f"Player Total: ${len(self.chips)}"),
-            "player_score": Text(370, 425, "", font_size=40)
+            "player_score": Text(370, 425, "", font_size=40),
+            "dealer_score": Text(370, 325, "", font_size=40),
         }
 
         self.buttons = {
@@ -431,10 +438,29 @@ class Game:
         }
 
     def deal_starting_cards(self):
+        self.texts["dealer_score"].set_text("")
+        if len(self.chips) == 0:
+            self.state = "lost_game"
+            self.texts["player_score"].set_text("Out of money. You Lost!")
+            return self.state
+        self.current_bet = 1
+        self.texts["bet_display"].set_text("$1")
+        self.player.cards = []
+        self.dealer.cards = []
         self.state = "dealing"
         self.flip_queue = None
         self.deal_queue = [self.player, self.dealer, self.player, self.dealer]
         self.last_deal_time = pygame.time.get_ticks()
+
+    def clear_player_cards(self):
+        for card in self.player.cards:
+            card.move_to(1000, 375)
+
+    def clear_dealer_cards(self):
+        self.current_bet = 1
+        self.texts["bet_display"].set_text("$1")
+        for card in self.dealer.cards:
+            card.move_to(1000, 375)
 
     def player_hit(self):
         self.deal_to_player()
@@ -443,22 +469,86 @@ class Game:
         self.player.cards[-1].flip()
         self.asset_manager.play_sound("deal_card")
         if self.player.get_value() > 21:
-            self.player_bust()
+            self.player_loss()
+
+    def player_loss(self):
+        self.state = "end_of_round"
+        self.last_deal_time = pygame.time.get_ticks()
+        self.actions = []
+
+        if self.player.get_value() > 21:
+            self.texts["player_score"].set_text("Over 21! You busted!")
+            self.asset_manager.play_sound("player_bust")
+            self.actions.append({"function": self.dealer.cards[1].flip, "time": 1000})
+        else:
+            self.texts["player_score"].set_text(f"Dealer score of {self.dealer.get_value()} beat your score of {self.player.get_value()}")
+        for chip in self.chip_pool:
+            self.actions.append({"function": chip.move_offscreen, "time": self.chip_delay})
+        self.actions.append({"function": self.clear_chip_pool,  "time": 1})
+        self.actions.append({"function": self.clear_player_cards,  "time": 500})
+        self.actions.append({"function": self.clear_dealer_cards, "time": 500})
+        self.actions.append({"function": self.deal_starting_cards, "time": 1000})
+
+        self.disable_buttons(("hit", "stand", "double", "decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
+        
+    def push(self):
+        self.state = "end_of_round"
+        self.last_deal_time = pygame.time.get_ticks()
+        self.texts["player_score"].set_text("Its a tie!")
+        self.actions = []
+        self.current_bet = 0
+        self.actions.append({"function": self.update_chip_pool,  "time": 500})
+        self.actions.append({"function": self.clear_player_cards,  "time": 500})
+        self.actions.append({"function": self.clear_dealer_cards, "time": 500})
+        self.actions.append({"function": self.deal_starting_cards, "time": 1000})
+
+    def player_win(self):
+        self.state = "end_of_round"
+        self.last_deal_time = pygame.time.get_ticks()
+        if self.player.get_value() == 21 and len(self.player) == 2: #blackjack pays 1.5 more
+            winnings = round(self.current_bet * 1.5)
+        else:
+            winnings = self.current_bet
+        self.texts["player_score"].set_text(f"You beat the dealer! Winnings: ${self.current_bet}")
+        self.actions = []
+        self.current_bet = 0
+        self.actions.append({"function": self.update_chip_pool,  "time": 500})
+        for i in range(winnings):
+            self.actions.append({"function": self.add_chip,  "time": self.chip_delay})
+        self.actions.append({"function": self.clear_player_cards,  "time": 500})
+        self.actions.append({"function": self.clear_dealer_cards, "time": 500})
+        self.actions.append({"function": self.deal_starting_cards, "time": 1000})
+
+        self.disable_buttons(("hit", "stand", "double", "decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
 
     def player_stand(self):
+        self.texts["dealer_score"].set_text(f"Dealer Score: {self.dealer.get_value()}")
         for card in self.dealer.cards[1:]:
-            card.flip()
+            if not card.face_up:
+                card.flip()
         self.disable_buttons(("double", "stand", "hit"))
+        self.last_deal_time = pygame.time.get_ticks()
+        self.state = "player_stand"
 
     def player_double(self):
-        for card in self.player.cards:
-            card.flip()
-        self.asset_manager.play_sound("flip_card")
+        self.current_bet *= 2
+        self.update_chip_pool()
+        self.deal_to_player()
+        self.disable_buttons(["double", "stand", "hit"])
+        self.texts["player_score"].set_text(f"{self.player.get_value()}")
+        self.player.cards[-1].flip()
+        self.asset_manager.play_sound("deal_card")
+        if self.player.get_value() > 21:
+            self.player_loss()
+        else:
+            self.player_stand()
 
     def increase_bet(self, amount):
-        if self.current_bet < 20:
+        if self.player_money < amount:
+            amount = self.player_money
+        if self.current_bet < self.max_bet:
             self.current_bet += amount
-            self.current_bet = min(self.current_bet, 20)
+            self.current_bet = min(self.current_bet, self.max_bet)
             self.texts["bet_display"].set_text(f"${self.current_bet}")
             self.update_chip_pool()
         
@@ -476,7 +566,7 @@ class Game:
         for chip in reversed(self.chips):
             if len(self.chip_pool) < self.current_bet:
                 self.chip_pool.append(chip)
-                chip.move_to(chip.default_pos.x, chip.default_pos.y - 500 + (chip.id%10)*6)
+                chip.move_to(chip.default_pos.x, 750 - chip.default_pos.y)#mirror chip y position when in pot. 
                 chip.in_bet = True
             else:
                 chip.in_bet = False
@@ -485,6 +575,23 @@ class Game:
                 self.player_money += 1
         
         self.texts["player_money"].set_text(f"Player Total: ${self.player_money}")
+
+    def add_chip(self):
+        self.player_money += 1
+        self.texts["player_money"].set_text(f"Player Total: ${self.player_money}")
+        self.chips.append(Chip(0,0, self.asset_manager.poker_chip_images[random.randint(0, 35)]))
+        self.chips[-1].speed = 35
+        default_x = 30 + 50 * (((len(self.chips) - 1)//10)%4)
+        default_y = 700 - 3*((len(self.chips)-1)%10) - 100*(((len(self.chips) - 1)//10)//4)
+        self.chips[-1].default_pos = pygame.Vector2(default_x, default_y)
+        self.chips[-1].move_to(default_x, default_y)
+        self.chips[-1].action_on_stop_moving = lambda: self.asset_manager.play_sound(f"chips_collide_{random.randint(1,4)}")
+        self.texts["player_money"].set_text(f"Player Total: ${len(self.chips)}")
+
+    def clear_chip_pool(self):
+        for chip in self.chip_pool:
+            self.chips.remove(chip)
+        self.chip_pool = []
 
     def confirm_bet(self):
         self.state = "flipping"
@@ -507,15 +614,7 @@ class Game:
         if self.state == "starting_chips":
             if len(self.chips) < self.starting_chips:
                 if current_time - self.last_deal_time > self.chip_delay:
-                    self.player_money += 1
-                    self.texts["player_money"].set_text(f"Player Total: ${self.player_money}")
-                    self.chips.append(Chip(0,0, self.asset_manager.poker_chip_images[random.randint(0, 35)]))
-                    self.chips[-1].speed = 35
-                    default_x = 30 + 50 * ((len(self.chips) - 1)//10)
-                    default_y = 700 - 3*((len(self.chips)-1)%10)
-                    self.chips[-1].default_pos = pygame.Vector2(default_x, default_y)
-                    self.chips[-1].move_to(default_x, default_y)
-                    self.chips[-1].action_on_stop_moving = lambda: self.asset_manager.play_sound(f"chips_collide_{random.randint(1,4)}")
+                    self.add_chip()
                     self.last_deal_time = current_time
             else:
                 self.deal_starting_cards()
@@ -536,7 +635,31 @@ class Game:
         if self.state == "enable_buttons":
             if current_time - self.last_deal_time > self.deal_delay*2:
                 self.enable_buttons(("decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
+                self.texts["player_score"].set_text("Place your bet!")
                 self.state = "player_set_bet"
+        if self.state == "end_of_round":
+            if len(self.actions) > 0:
+                action = self.actions[0]
+                if current_time - self.last_deal_time > action["time"]:
+                    self.last_deal_time = current_time
+                    action = self.actions.pop(0)
+                    action["function"]()
+        if self.state == "player_stand":
+            if current_time - self.last_deal_time > self.deal_delay*5:
+                dealer_score = self.dealer.get_value()
+                if dealer_score < 17:
+                    self.deal_to_dealer()
+                    dealer_score = self.dealer.get_value()
+                    self.texts["dealer_score"].set_text(f"Dealer Score: {dealer_score}")
+                    if not self.dealer.cards[-1].face_up:
+                        self.dealer.cards[-1].flip()
+                    self.last_deal_time = current_time
+                elif dealer_score > self.player.get_value() and dealer_score <= 21:
+                    self.player_loss()
+                elif dealer_score == self.player.get_value():
+                    self.push()
+                elif dealer_score < self.player.get_value() or dealer_score > 21:
+                    self.player_win()
         if self.state == "flipping":
             if self.flip_queue == None:
                 self.flip_queue = [self.player.cards, [self.dealer.cards[0]]]
@@ -549,8 +672,10 @@ class Game:
                     self.asset_manager.play_sound("flip_card")
             else:
                 self.state = "player_turn"
-                self.texts["player_score"].set_text(f"{self.player.get_value()}")
-                self.enable_buttons(("hit", "stand", "double" if self.current_bet*2 <= self.player_money else None))
+                self.texts["player_score"].set_text(f"Your Score: {self.player.get_value()}")
+                self.enable_buttons(("hit", "stand"))
+                if self.current_bet * 2 <= len(self.chips):
+                    self.enable_buttons(["double"])
                 self.disable_buttons(("decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
         
 
