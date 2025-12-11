@@ -418,6 +418,10 @@ class Game:
         self.sounds["deal_card"].set_volume(0.3)
         self.sounds["flip_card"] = pygame.mixer.Sound("Audio/flip_card.wav")
         self.sounds["flip_card"].set_volume(0.15)
+        self.sounds["disable_buttons"] = pygame.mixer.Sound("Audio/switch_004.ogg")
+        self.sounds["disable_buttons"].set_volume(0.15)
+        self.sounds["enable_buttons"] = pygame.mixer.Sound("Audio/switch_005.ogg")
+        self.sounds["enable_buttons"].set_volume(0.15)
         for i in range(1, 5):
             self.sounds[f"chips_collide_{i}"] = pygame.mixer.Sound(f"Audio/chips-collide-{i}.ogg")
             self.sounds[f"chips_collide_{i}"].set_volume(0.15)
@@ -515,11 +519,14 @@ class Game:
                         self.deal_to_dealer()
                     if len(self.deal_queue) == 0:
                         hand.cards[-1].action_on_stop_moving = self.update_chip_pool
-                        self.enable_buttons(("decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
                     self.last_deal_time = current_time
                     self.play_sound("deal_card")
             else:
-                self.state = "set_bet"
+                self.state = "enable_buttons"
+        if self.state == "enable_buttons":
+            if current_time - self.last_deal_time > self.deal_delay*2:
+                self.enable_buttons(("decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
+                self.state = "player_set_bet"
         if self.state == "flipping":
             if self.flip_queue == None:
                 self.flip_queue = [self.player.cards, [self.dealer.cards[0]]]
@@ -573,14 +580,14 @@ class Game:
 
     def enable_buttons(self, button_names):
         if len(button_names) > 0:
-            self.play_sound("toggle_button")
+            self.play_sound("enable_buttons")
         for button in button_names:
             if button != None:
                 self.buttons[button].clickable = True
 
     def disable_buttons(self, button_names):
         if len(button_names) > 0:
-            self.play_sound("toggle_button")
+            self.play_sound("disable_buttons")
 
         for button in button_names:
             self.buttons[button].clickable = False
