@@ -264,84 +264,15 @@ class Button:
                 else:
                     self.color = self.default_color
 class AssetManager:
-    pass
     def __init__(self):
-        pass
-
-class Game:
-    BACKGROUND_COLOR = (47, 101, 77)
-    def __init__(self, game_surface):
         pygame.mixer.init()
         self.sounds = {}
         self.card_images = {}
         self.poker_chip_images = []
+
         self.load_card_images(150, 210)
         self.load_chip_images(50, 50, range(0, 360, 10))
         self.load_audio()
-        
-        self.game_surface = game_surface
-
-        self.deck = Deck(self.card_images, 575, 35)
-
-        self.chips = []
- 
-        self.chip_pool = []
-        self.starting_chips = 20
-        self.player_money = 0
-
-        self.dealer = Hand([], 212, 100)
-        self.dealer.facedown_offset = 125
-        self.player = Hand([], 265, 450)
-
-        self.last_deal_time = 0
-        self.deal_delay = 250 #250 ms
-        self.chip_delay = 100
-
-        self.state = "starting_chips"
-
-        self.current_bet = 1
-
-        self.texts = {
-            "bet_display": Text(370, 700, f"${self.current_bet}", text_offset_x=-6),
-            "player_money": Text(25, 730, f"Player Total: ${len(self.chips)}")
-        }
-
-        self.buttons = {
-            "hit": Button(225, 400, 100, 50, "HIT!", 
-                          color = (176, 58, 54), hover_color = (166, 50, 50), 
-                          clicked_color = (146, 45, 45), action=self.player_hit, clickable= False),
-            "stand": Button(375, 400, 100, 50, "STAND", 
-                            color = (176, 58, 54), hover_color = (166, 50, 50), 
-                            clicked_color = (146, 45, 45), action=self.player_stand, clickable= False),
-            "double": Button(525, 400, 100, 50, "DOUBLE!", 
-                             color = (176, 58, 54), hover_color = (166, 50, 50), 
-                             clicked_color = (146, 45, 45), action=self.player_double, clickable= False),
-            "increase_bet-1": Button(425, 700, 50, 50, "+1", 
-                        color = (50, 168, 82), hover_color = (43, 148, 71), 
-                        clicked_color = (37, 128, 62), border_radius = 20, travel_distance = 8,
-                        font_size = 40, action= lambda: self.increase_bet(1)),
-            "decrease_bet-1": Button(325, 700, 50, 50, "-1", 
-                        color = (166, 50, 50), hover_color = (146, 45, 45), 
-                        clicked_color = (140, 40, 40), border_radius = 20, travel_distance = 8,
-                        font_size = 40, action= lambda: self.decrease_bet(1)),
-            "increase_bet-5": Button(480, 700, 50, 50, "+5", 
-                        color = (50, 168, 82), hover_color = (43, 148, 71), 
-                        clicked_color = (37, 128, 62), border_radius = 20, travel_distance = 8,
-                        font_size = 40, action= lambda: self.increase_bet(5)),
-            "decrease_bet-5": Button(270, 700, 50, 50, "-5", 
-                        color = (166, 50, 50), hover_color = (146, 45, 45), 
-                        clicked_color = (140, 40, 40), border_radius = 20, travel_distance = 8,
-                        font_size = 40, action= lambda: self.decrease_bet(5)),
-            "confirm_bet": Button(600, 700, 125, 75, "Confirm Bet", 
-                             color = (176, 58, 54), hover_color = (166, 50, 50), 
-                             clicked_color = (146, 45, 45), action=self.confirm_bet),
-        }
-
-    def deal_starting_cards(self):
-        self.state = "dealing"
-        self.flip_queue = None
-        self.deal_queue = [self.player, self.dealer, self.player, self.dealer]
-        self.last_deal_time = pygame.time.get_ticks()
 
     def load_chip_images(self, width, height, angles):
         #Generate chip images rotated different angles. 
@@ -430,11 +361,80 @@ class Game:
         if name in self.sounds:
             self.sounds[name].play()
 
+class Game:
+    BACKGROUND_COLOR = (47, 101, 77)
+    def __init__(self, game_surface):
+        self.asset_manager = AssetManager()
+        
+        self.game_surface = game_surface
+
+        self.deck = Deck(self.asset_manager.card_images, 575, 35)
+
+        self.chips = []
+ 
+        self.chip_pool = []
+        self.starting_chips = 20
+        self.player_money = 0
+
+        self.dealer = Hand([], 212, 100)
+        self.dealer.facedown_offset = 125
+        self.player = Hand([], 265, 450)
+
+        self.last_deal_time = 0
+        self.deal_delay = 250 #250 ms
+        self.chip_delay = 100
+
+        self.state = "starting_chips"
+
+        self.current_bet = 1
+
+        self.texts = {
+            "bet_display": Text(370, 700, f"${self.current_bet}", text_offset_x=-6),
+            "player_money": Text(25, 730, f"Player Total: ${len(self.chips)}")
+        }
+
+        self.buttons = {
+            "hit": Button(225, 400, 100, 50, "HIT!", 
+                          color = (176, 58, 54), hover_color = (166, 50, 50), 
+                          clicked_color = (146, 45, 45), action=self.player_hit, clickable= False),
+            "stand": Button(375, 400, 100, 50, "STAND", 
+                            color = (176, 58, 54), hover_color = (166, 50, 50), 
+                            clicked_color = (146, 45, 45), action=self.player_stand, clickable= False),
+            "double": Button(525, 400, 100, 50, "DOUBLE!", 
+                             color = (176, 58, 54), hover_color = (166, 50, 50), 
+                             clicked_color = (146, 45, 45), action=self.player_double, clickable= False),
+            "increase_bet-1": Button(425, 700, 50, 50, "+1", 
+                        color = (50, 168, 82), hover_color = (43, 148, 71), 
+                        clicked_color = (37, 128, 62), border_radius = 20, travel_distance = 8,
+                        font_size = 40, action= lambda: self.increase_bet(1)),
+            "decrease_bet-1": Button(325, 700, 50, 50, "-1", 
+                        color = (166, 50, 50), hover_color = (146, 45, 45), 
+                        clicked_color = (140, 40, 40), border_radius = 20, travel_distance = 8,
+                        font_size = 40, action= lambda: self.decrease_bet(1)),
+            "increase_bet-5": Button(480, 700, 50, 50, "+5", 
+                        color = (50, 168, 82), hover_color = (43, 148, 71), 
+                        clicked_color = (37, 128, 62), border_radius = 20, travel_distance = 8,
+                        font_size = 40, action= lambda: self.increase_bet(5)),
+            "decrease_bet-5": Button(270, 700, 50, 50, "-5", 
+                        color = (166, 50, 50), hover_color = (146, 45, 45), 
+                        clicked_color = (140, 40, 40), border_radius = 20, travel_distance = 8,
+                        font_size = 40, action= lambda: self.decrease_bet(5)),
+            "confirm_bet": Button(600, 700, 125, 75, "Confirm Bet", 
+                             color = (176, 58, 54), hover_color = (166, 50, 50), 
+                             clicked_color = (146, 45, 45), action=self.confirm_bet),
+        }
+
+    def deal_starting_cards(self):
+        self.state = "dealing"
+        self.flip_queue = None
+        self.deal_queue = [self.player, self.dealer, self.player, self.dealer]
+        self.last_deal_time = pygame.time.get_ticks()
+
     def player_hit(self):
         self.deal_to_player()
         self.disable_buttons(["double"])
         self.player.cards[-1].flip()
-        self.play_sound("deal_card")
+        self.asset_manager.play_sound("deal_card")
 
     def player_stand(self):
         self.disable_buttons(("double", "stand", "hit"))
@@ -442,7 +442,7 @@ class Game:
     def player_double(self):
         for card in self.player.cards:
             card.flip()
-        self.play_sound("flip_card")
+        self.asset_manager.play_sound("flip_card")
 
     def increase_bet(self, amount):
         if self.current_bet < 20:
@@ -499,13 +499,13 @@ class Game:
                 if current_time - self.last_deal_time > self.chip_delay:
                     self.player_money += 1
                     self.texts["player_money"].set_text(f"Player Total: ${self.player_money}")
-                    self.chips.append(Chip(0,0, self.poker_chip_images[random.randint(0, 35)]))
+                    self.chips.append(Chip(0,0, self.asset_manager.poker_chip_images[random.randint(0, 35)]))
                     self.chips[-1].speed = 35
                     default_x = 30 + 50 * ((len(self.chips) - 1)//10)
                     default_y = 700 - 3*((len(self.chips)-1)%10)
                     self.chips[-1].default_pos = pygame.Vector2(default_x, default_y)
                     self.chips[-1].move_to(default_x, default_y)
-                    self.chips[-1].action_on_stop_moving = lambda: self.play_sound(f"chips_collide_{random.randint(1,4)}")
+                    self.chips[-1].action_on_stop_moving = lambda: self.asset_manager.play_sound(f"chips_collide_{random.randint(1,4)}")
                     self.last_deal_time = current_time
             else:
                 self.deal_starting_cards()
@@ -520,7 +520,7 @@ class Game:
                     if len(self.deal_queue) == 0:
                         hand.cards[-1].action_on_stop_moving = self.update_chip_pool
                     self.last_deal_time = current_time
-                    self.play_sound("deal_card")
+                    self.asset_manager.play_sound("deal_card")
             else:
                 self.state = "enable_buttons"
         if self.state == "enable_buttons":
@@ -536,7 +536,7 @@ class Game:
                     for card in cards_to_flip:
                         self.last_deal_time = current_time
                         card.flip()
-                    self.play_sound("flip_card")
+                    self.asset_manager.play_sound("flip_card")
             else:
                 self.state = "player_turn"
                 self.enable_buttons(("hit", "stand", "double" if self.player_money * 2 >= self.current_bet else None))
@@ -562,7 +562,7 @@ class Game:
                 if button.rect.collidepoint(self.mouse_pos):
                     button.color = button.clicked_color
                     button.clicked = True
-                    self.play_sound("click")
+                    self.asset_manager.play_sound("click")
                     button.frame = button.travel_distance
                 else:
                     button.color = button.default_color
@@ -580,14 +580,14 @@ class Game:
 
     def enable_buttons(self, button_names):
         if len(button_names) > 0:
-            self.play_sound("enable_buttons")
+            self.asset_manager.play_sound("enable_buttons")
         for button in button_names:
             if button != None:
                 self.buttons[button].clickable = True
 
     def disable_buttons(self, button_names):
         if len(button_names) > 0:
-            self.play_sound("disable_buttons")
+            self.asset_manager.play_sound("disable_buttons")
 
         for button in button_names:
             self.buttons[button].clickable = False
