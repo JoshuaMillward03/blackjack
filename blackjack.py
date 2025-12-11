@@ -138,7 +138,7 @@ class Deck:
             game_surface.blit(self.images["card_back"], (self.x+int(i*0.25), self.y-int(i*0.25)))
 
 class Hand:
-    def __init__(self, cards: list[Card], x = 0, y = 0, card_stack_spacing = 23, ):
+    def __init__(self, cards: list[Card], x = 0, y = 0, card_stack_spacing = 23):
         self.cards = cards
         self.aces = self.get_aces_count()
         self.value = self.get_value()
@@ -158,6 +158,7 @@ class Hand:
 
     def get_value(self):
         value = 0
+        aces = self.get_aces_count()
         faces = "JQK"
         for card in self.cards:
             if card.rank in faces:
@@ -165,7 +166,10 @@ class Hand:
             elif card.rank == "A":
                 value += 11
             else:
-                value += int(card)
+                value += int(card.rank)
+        while aces > 0 and value > 21:
+            aces -= 1
+            value -= 10
         return value
     
 @dataclass
@@ -199,6 +203,7 @@ class Text:
 
     def draw(self, game_surface):
         game_surface.blit(self.scaled_text_surface, (self.x + self.text_offset_x, self.y + self.text_offset_y))
+
 
 @dataclass 
 class Button:
@@ -378,7 +383,7 @@ class Game:
 
         self.dealer = Hand([], 212, 100)
         self.dealer.facedown_offset = 125
-        self.player = Hand([], 265, 450)
+        self.player = Hand([], 265, 460)
 
         self.last_deal_time = 0
         self.deal_delay = 250 #250 ms
@@ -390,17 +395,18 @@ class Game:
 
         self.texts = {
             "bet_display": Text(370, 700, f"${self.current_bet}", text_offset_x=-6),
-            "player_money": Text(25, 730, f"Player Total: ${len(self.chips)}")
+            "player_money": Text(25, 730, f"Player Total: ${len(self.chips)}"),
+            "player_score": Text(370, 425, "", font_size=40)
         }
 
         self.buttons = {
-            "hit": Button(225, 400, 100, 50, "HIT!", 
+            "hit": Button(225, 380, 100, 50, "HIT!", 
                           color = (176, 58, 54), hover_color = (166, 50, 50), 
                           clicked_color = (146, 45, 45), action=self.player_hit, clickable= False),
-            "stand": Button(375, 400, 100, 50, "STAND", 
+            "stand": Button(375, 380, 100, 50, "STAND", 
                             color = (176, 58, 54), hover_color = (166, 50, 50), 
                             clicked_color = (146, 45, 45), action=self.player_stand, clickable= False),
-            "double": Button(525, 400, 100, 50, "DOUBLE!", 
+            "double": Button(525, 380, 100, 50, "DOUBLE!", 
                              color = (176, 58, 54), hover_color = (166, 50, 50), 
                              clicked_color = (146, 45, 45), action=self.player_double, clickable= False),
             "increase_bet-1": Button(425, 700, 50, 50, "+1", 
@@ -433,10 +439,15 @@ class Game:
     def player_hit(self):
         self.deal_to_player()
         self.disable_buttons(["double"])
+        self.texts["player_score"].set_text(f"{self.player.get_value()}")
         self.player.cards[-1].flip()
         self.asset_manager.play_sound("deal_card")
+        if self.player.get_value() > 21:
+            self.player_bust()
 
     def player_stand(self):
+        for card in self.dealer.cards[1:]:
+            card.flip()
         self.disable_buttons(("double", "stand", "hit"))
 
     def player_double(self):
@@ -474,7 +485,6 @@ class Game:
                 self.player_money += 1
         
         self.texts["player_money"].set_text(f"Player Total: ${self.player_money}")
-                
 
     def confirm_bet(self):
         self.state = "flipping"
@@ -539,9 +549,10 @@ class Game:
                     self.asset_manager.play_sound("flip_card")
             else:
                 self.state = "player_turn"
-                self.enable_buttons(("hit", "stand", "double" if self.player_money * 2 >= self.current_bet else None))
+                self.texts["player_score"].set_text(f"{self.player.get_value()}")
+                self.enable_buttons(("hit", "stand", "double" if self.current_bet*2 <= self.player_money else None))
                 self.disable_buttons(("decrease_bet-1", "increase_bet-1","decrease_bet-5", "increase_bet-5", "confirm_bet"))
-                
+        
 
         self.mouse_pos = mouse_pos
         for button in self.buttons.values():
@@ -623,12 +634,12 @@ class Game:
 
     def draw(self):
         self.draw_background()
-        self.draw_texts()
         self.draw_chips()
         self.draw_buttons()
         self.draw_deck()
         self.draw_dealer_hand()
         self.draw_player_hand()
+        self.draw_texts()
         
         
 
